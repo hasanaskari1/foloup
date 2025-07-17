@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Analytics, CallData } from "@/types/response";
 import axios from "axios";
 import { ScrollArea } from "@radix-ui/react-scroll-area";
 import ReactAudioPlayer from "react-audio-player";
-import { DownloadIcon, TrashIcon } from "lucide-react";
+import { DownloadIcon, TrashIcon, TrendingUp, Brain, MessageSquare, Send, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ResponseService } from "@/services/responses.service";
@@ -36,11 +36,18 @@ import {
 } from "@/components/ui/select";
 import { CandidateStatus } from "@/lib/enum";
 import { ArrowLeft } from "lucide-react";
+import { BarChart, PieChart } from "@mui/x-charts";
+import { convertSecondstoMMSS } from "@/lib/utils";
 
 type CallProps = {
   call_id: string;
   onDeleteResponse: (deletedCallId: string) => void;
   onCandidateStatusChange: (callId: string, newStatus: string) => void;
+};
+
+type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
 };
 
 function CallInfo({
@@ -59,6 +66,65 @@ function CallInfo({
   const [candidateStatus, setCandidateStatus] = useState<string>("");
   const [interviewId, setInterviewId] = useState<string>("");
   const [tabSwitchCount, setTabSwitchCount] = useState<number>();
+  
+  // Chatbot states
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // Calculate dynamic data from actual API response
+  const dynamicGraphData = useMemo(() => {
+    if (!call || !analytics) return null;
+
+    // Calculate word count per speaker
+    let agentWordCount = 0;
+    let userWordCount = 0;
+    
+    call.transcript_object?.forEach((entry) => {
+      if (entry.role === "agent") {
+        agentWordCount += entry.words.length;
+      } else {
+        userWordCount += entry.words.length;
+      }
+    });
+
+    // Skills assessment based on available metrics
+    const skillsData = [
+      { 
+        skill: "Overall Score", 
+        score: analytics.overallScore || 0 
+      },
+      { 
+        skill: "Communication", 
+        score: (analytics.communication?.score || 0) * 10 
+      },
+      { 
+        skill: "Completion", 
+        score: call.call_analysis?.call_completion_rating === "Complete" ? 100 : 
+               call.call_analysis?.call_completion_rating === "Partial" ? 60 : 30
+      },
+      { 
+        skill: "Engagement", 
+        score: call.call_analysis?.user_sentiment === "Positive" ? 90 :
+               call.call_analysis?.user_sentiment === "Neutral" ? 60 : 30
+      },
+    ];
+
+    return {
+      wordCountDistribution: [
+        { label: "Interviewer", value: agentWordCount, color: "#6366f1" },
+        { label: name || "Candidate", value: userWordCount, color: "#10b981" },
+      ],
+      skillsData,
+    };
+  }, [call, analytics, name]);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     const fetchResponses = async () => {
@@ -79,7 +145,6 @@ function CallInfo({
     };
 
     fetchResponses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call_id]);
 
   useEffect(() => {
@@ -100,7 +165,6 @@ function CallInfo({
     };
 
     fetchEmail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call_id]);
 
   useEffect(() => {
@@ -108,12 +172,10 @@ function CallInfo({
       const agentReplacement = "**AI interviewer:**";
       const userReplacement = `**${name}:**`;
 
-      // Replace "Agent:" with "AI interviewer:" and "User:" with the variable `${name}:`
       let updatedTranscript = transcript
         .replace(/Agent:/g, agentReplacement)
         .replace(/User:/g, userReplacement);
 
-      // Add space between the dialogues
       updatedTranscript = updatedTranscript.replace(/(?:\r\n|\r|\n)/g, "\n\n");
 
       return updatedTranscript;
@@ -140,7 +202,6 @@ function CallInfo({
 
       toast.success("Response deleted successfully.", {
         position: "bottom-right",
-
         duration: 3000,
       });
     } catch (error) {
@@ -148,9 +209,41 @@ function CallInfo({
 
       toast.error("Failed to delete the response.", {
         position: "bottom-right",
-
         duration: 3000,
       });
+    }
+  };
+
+  const handleChatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isChatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setIsChatLoading(true);
+
+    try {
+      const response = await axios.post("/api/analyze-transcript", {
+        transcript: transcript,
+        question: userMessage,
+        candidateName: name,
+        analytics: analytics,
+        callAnalysis: call?.call_analysis,
+      });
+
+      setChatMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: response.data.answer 
+      }]);
+    } catch (error) {
+      console.error("Error getting AI response:", error);
+      setChatMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: "I'm sorry, I couldn't process your question. Please try again." 
+      }]);
+    } finally {
+      setIsChatLoading(false);
     }
   };
 
@@ -164,9 +257,6 @@ function CallInfo({
         <>
           <div className="bg-slate-200 rounded-2xl min-h-[120px] p-4 px-5 y-3">
             <div className="flex flex-col justify-between bt-2">
-              {/* <p className="font-semibold my-2 ml-2">
-                Response Analysis and Insights
-              </p> */}
               <div>
                 <div className="flex justify-between items-center pb-4 pr-2">
                   <div
@@ -180,7 +270,7 @@ function CallInfo({
                   </div>
                   {tabSwitchCount && tabSwitchCount > 0 && (
                     <p className="text-sm font-semibold text-red-500 bg-red-200 rounded-sm px-2 py-1">
-                      Tab Switching Detected
+                      Tab Switching Detected: {tabSwitchCount} times
                     </p>
                   )}
                 </div>
@@ -294,8 +384,8 @@ function CallInfo({
                 </div>
               </div>
             </div>
-            {/* <div>{call.}</div> */}
           </div>
+          
           <div className="bg-slate-200 rounded-2xl min-h-[120px] p-4 px-5 my-3">
             <p className="font-semibold my-2">General Summary</p>
 
@@ -409,6 +499,149 @@ function CallInfo({
               </div>
             </div>
           </div>
+
+          {/* Performance Analytics Section - Only Skills Assessment and Word Count */}
+          {dynamicGraphData && (
+            <div className="bg-slate-200 rounded-2xl min-h-[120px] p-4 px-5 my-3">
+              <p className="font-semibold my-2 mb-4 flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Performance Analytics
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                {/* Skills Assessment Bar Chart */}
+                <div className="bg-slate-50 rounded-2xl p-4">
+                  <p className="font-medium text-sm mb-3 flex items-center gap-2">
+                    <Brain className="w-4 h-4" />
+                    Skills Assessment
+                  </p>
+                  <BarChart
+                    series={[
+                      {
+                        data: dynamicGraphData.skillsData.map(item => item.score),
+                        color: '#6366f1',
+                      },
+                    ]}
+                    xAxis={[
+                      {
+                        data: dynamicGraphData.skillsData.map(item => item.skill),
+                        scaleType: 'band',
+                      },
+                    ]}
+                    height={250}
+                    margin={{ left: 50, right: 20, top: 20, bottom: 60 }}
+                  />
+                </div>
+
+                {/* Word Count Distribution */}
+                <div className="bg-slate-50 rounded-2xl p-4">
+                  <p className="font-medium text-sm mb-3 flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    Word Count Distribution
+                  </p>
+                  <PieChart
+                    series={[
+                      {
+                        data: dynamicGraphData.wordCountDistribution,
+                        highlightScope: { faded: 'global', highlighted: 'item' },
+                        faded: { innerRadius: 30, additionalRadius: -30, color: 'gray' },
+                        innerRadius: 30,
+                        outerRadius: 100,
+                        paddingAngle: 2,
+                        cornerRadius: 5,
+                      },
+                    ]}
+                    height={250}
+                    slotProps={{
+                      legend: {
+                        direction: 'column',
+                        position: { vertical: 'middle', horizontal: 'right' },
+                        padding: 0,
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* AI Assistant Section */}
+          <div className="bg-slate-200 rounded-2xl min-h-[400px] p-4 px-5 my-3">
+            <p className="font-semibold my-2 mb-4 flex items-center gap-2">
+              <Bot className="w-5 h-5" />
+              AI Interview Assistant
+            </p>
+            <p className="text-sm text-gray-600 mb-4">
+              Ask questions about the interview transcript, candidate performance, or get specific insights.
+            </p>
+            
+            {/* Chat Messages */}
+            <div 
+              ref={chatScrollRef}
+              className="bg-slate-50 rounded-2xl p-4 h-[300px] overflow-y-auto mb-4 space-y-3"
+            >
+              {chatMessages.length === 0 ? (
+                <div className="text-center text-gray-500 mt-20">
+                  <Bot className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-sm">Ask me anything about this interview!</p>
+                  <div className="mt-4 space-y-2">
+                    <p className="text-xs text-gray-400">Example questions:</p>
+                    <p className="text-xs italic">"What were the candidate's main strengths?"</p>
+                    <p className="text-xs italic">"Did they answer all questions properly?"</p>
+                    <p className="text-xs italic">"What technical skills did they mention?"</p>
+                  </div>
+                </div>
+              ) : (
+                chatMessages.map((message, index) => (
+                  <div
+                    key={index}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] p-3 rounded-lg ${
+                        message.role === 'user'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-200 text-gray-800'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+              {isChatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-200 p-3 rounded-lg">
+                    <div className="flex space-x-2">
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Chat Input */}
+            <form onSubmit={handleChatSubmit} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Ask about the interview..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                className="flex-1 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+                disabled={isChatLoading}
+              />
+              <Button 
+                type="submit" 
+                disabled={isChatLoading || !chatInput.trim()}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Send className="w-4 h-4" />
+              </Button>
+            </form>
+          </div>
+
           {analytics &&
             analytics.questionSummaries &&
             analytics.questionSummaries.length > 0 && (
@@ -426,12 +659,12 @@ function CallInfo({
                 </ScrollArea>
               </div>
             )}
+            
           <div className="bg-slate-200 rounded-2xl min-h-[150px] max-h-[500px] p-4 px-5 mb-[150px]">
             <p className="font-semibold my-2 mb-4">Transcript</p>
             <ScrollArea className="rounded-2xl text-sm h-96  overflow-y-auto whitespace-pre-line px-2">
               <div
                 className="text-sm p-4 rounded-2xl leading-5 bg-slate-50"
-                // eslint-disable-next-line react/no-danger
                 dangerouslySetInnerHTML={{ __html: marked(transcript) }}
               />
             </ScrollArea>
