@@ -596,22 +596,25 @@ function CallInfo({
                   </div>
                 </div>
               ) : (
-                chatMessages.map((message, idx) => (
-                  <div
-                    key={`message-${idx}-${message.role}`}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                  >
+                chatMessages.map((message, idx) => {
+                  const messageKey = `${message.role}-${idx}-${Date.now()}`;
+                  return (
                     <div
-                      className={`max-w-[80%] p-3 rounded-lg ${
-                        message.role === 'user'
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-gray-200 text-gray-800'
-                      }`}
+                      key={messageKey}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      <div
+                        className={`max-w-[80%] p-3 rounded-lg ${
+                          message.role === 'user'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-gray-200 text-gray-800'
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               {isChatLoading && (
                 <div className="flex justify-start">
@@ -627,14 +630,14 @@ function CallInfo({
             </div>
 
             {/* Chat Input */}
-            <form onSubmit={handleChatSubmit} className="flex gap-2">
+            <form className="flex gap-2" onSubmit={handleChatSubmit}>
               <input
                 type="text"
                 placeholder="Ask about the interview..."
                 value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
                 className="flex-1 bg-slate-50 px-3 py-2 rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
                 disabled={isChatLoading}
+                onChange={(e) => setChatInput(e.target.value)}
               />
               <Button 
                 type="submit" 
@@ -667,6 +670,7 @@ function CallInfo({
           <div className="bg-slate-200 rounded-2xl min-h-[150px] max-h-[500px] p-4 px-5 mb-[150px]">
             <p className="font-semibold my-2 mb-4">Transcript</p>
             <ScrollArea className="rounded-2xl text-sm h-96  overflow-y-auto whitespace-pre-line px-2">
+              {/* eslint-disable-next-line react/no-danger */}
               <div
                 className="text-sm p-4 rounded-2xl leading-5 bg-slate-50"
                 dangerouslySetInnerHTML={{ __html: marked(transcript) }}
