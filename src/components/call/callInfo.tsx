@@ -598,6 +598,7 @@ function CallInfo({
               ) : (
                 chatMessages.map((message, idx) => {
                   const messageKey = `${message.role}-${idx}-${Date.now()}`;
+                  
                   return (
                     <div
                       key={messageKey}

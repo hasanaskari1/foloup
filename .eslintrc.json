@@ -2,6 +2,6 @@
     "extends": "next/core-web-vitals",
     "rules": {
         "react/no-danger": "off",
-        "react/no-array-index-key": "warn"
+        "newline-before-return": "off"
     }
 }
