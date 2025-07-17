@@ -75,7 +75,9 @@ function CallInfo({
 
   // Calculate dynamic data from actual API response
   const dynamicGraphData = useMemo(() => {
-    if (!call || !analytics) return null;
+    if (!call || !analytics) {
+      return null;
+    }
 
     // Calculate word count per speaker
     let agentWordCount = 0;
@@ -216,7 +218,9 @@ function CallInfo({
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chatInput.trim() || isChatLoading) return;
+    if (!chatInput.trim() || isChatLoading) {
+      return;
+    }
 
     const userMessage = chatInput.trim();
     setChatInput("");
@@ -586,15 +590,15 @@ function CallInfo({
                   <p className="text-sm">Ask me anything about this interview!</p>
                   <div className="mt-4 space-y-2">
                     <p className="text-xs text-gray-400">Example questions:</p>
-                    <p className="text-xs italic">"What were the candidate's main strengths?"</p>
-                    <p className="text-xs italic">"Did they answer all questions properly?"</p>
-                    <p className="text-xs italic">"What technical skills did they mention?"</p>
+                    <p className="text-xs italic">&quot;What were the candidate&apos;s main strengths?&quot;</p>
+                    <p className="text-xs italic">&quot;Did they answer all questions properly?&quot;</p>
+                    <p className="text-xs italic">&quot;What technical skills did they mention?&quot;</p>
                   </div>
                 </div>
               ) : (
-                chatMessages.map((message, index) => (
+                chatMessages.map((message, idx) => (
                   <div
-                    key={index}
+                    key={`message-${idx}-${message.role}`}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
@@ -613,9 +617,9 @@ function CallInfo({
                 <div className="flex justify-start">
                   <div className="bg-gray-200 p-3 rounded-lg">
                     <div className="flex space-x-2">
-                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" />
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
                     </div>
                   </div>
                 </div>
@@ -634,8 +638,8 @@ function CallInfo({
               />
               <Button 
                 type="submit" 
-                disabled={isChatLoading || !chatInput.trim()}
                 className="bg-indigo-600 hover:bg-indigo-700"
+                disabled={isChatLoading || !chatInput.trim()}
               >
                 <Send className="w-4 h-4" />
               </Button>
