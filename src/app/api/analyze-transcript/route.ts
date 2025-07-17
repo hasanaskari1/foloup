@@ -69,7 +69,7 @@ ${analytics?.questionSummaries?.map((qs: any, index: number) =>
       { status: 200 }
     );
   } catch (error) {
-    logger.error("Error analyzing transcript:", error);
+    logger.error("Error analyzing transcript:", error as Error);
     
     return NextResponse.json(
       { 
